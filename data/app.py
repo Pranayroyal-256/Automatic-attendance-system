@@ -1,38 +1,45 @@
 import streamlit as st
 import pandas as pd
 import os
-import time
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
+st.set_page_config(page_title="Attendance Dashboard")
+
 st.title("Automatic Attendance System Dashboard")
 
-# Auto refresh
-count = st_autorefresh(interval=5000, key="refresh")
+st_autorefresh(interval=5000, key="refresh")
 
-today = datetime.now().strftime("%d-%m-%Y")
+try:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-st.write("Today's Date:", today)
+    attendance_folder = os.path.join(BASE_DIR, "attendance")
 
-attendance_folder = "attendance"
+    st.write("Attendance folder:")
+    st.write(attendance_folder)
 
-if os.path.exists(attendance_folder):
-    files = os.listdir(attendance_folder)
-else:
-    files = []
+    if os.path.exists(attendance_folder):
 
-csv_files = [file for file in files if file.endswith(".csv")]
+        files = os.listdir(attendance_folder)
 
-if csv_files:
-    latest_file = sorted(csv_files)[-1]
+        csv_files = [f for f in files if f.endswith(".csv")]
 
-    path = os.path.join(attendance_folder, latest_file)
+        if csv_files:
+            latest_file = sorted(csv_files)[-1]
 
-    df = pd.read_csv(path)
+            file_path = os.path.join(attendance_folder, latest_file)
 
-    st.success("Attendance Loaded Successfully")
+            df = pd.read_csv(file_path)
 
-    st.dataframe(df)
+            st.success("Attendance Loaded Successfully")
+            st.dataframe(df)
 
-else:
-    st.warning("No attendance records found yet.")
+        else:
+            st.warning("No CSV attendance files found")
+
+    else:
+        st.error("Attendance folder not found")
+
+except Exception as e:
+    st.error("Application Error:")
+    st.exception(e)
