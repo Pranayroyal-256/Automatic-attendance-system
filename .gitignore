@@ -1,0 +1,4 @@
+*.pkl
+*.avi
+attendance/*.csv
+__pycache__/
