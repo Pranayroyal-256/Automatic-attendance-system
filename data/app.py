@@ -1,29 +1,35 @@
 import streamlit as st
 import pandas as pd
-import time 
+import os
+import time
 from datetime import datetime
-
-ts=time.time()
-date=datetime.fromtimestamp(ts).strftime("%d-%m-%Y")
-timestamp=datetime.fromtimestamp(ts).strftime("%H:%M-%S")
-
 from streamlit_autorefresh import st_autorefresh
 
-count = st_autorefresh(interval=2000, limit=100, key="fizzbuzzcounter")
+st.title("Automatic Attendance System Dashboard")
 
-if count == 0:
-    st.write("Count is zero")
-elif count % 3 == 0 and count % 5 == 0:
-    st.write("FizzBuzz")
-elif count % 3 == 0:
-    st.write("Fizz")
-elif count % 5 == 0:
-    st.write("Buzz")
+# Auto refresh
+count = st_autorefresh(interval=5000, key="refresh")
+
+today = datetime.now().strftime("%d-%m-%Y")
+
+st.write("Today's Date:", today)
+
+attendance_folder = "attendance"
+
+files = os.listdir(attendance_folder)
+
+csv_files = [file for file in files if file.endswith(".csv")]
+
+if csv_files:
+    latest_file = sorted(csv_files)[-1]
+
+    path = os.path.join(attendance_folder, latest_file)
+
+    df = pd.read_csv(path)
+
+    st.success("Attendance Loaded Successfully")
+
+    st.dataframe(df)
+
 else:
-    st.write(f"Count: {count}")
-
-
-df=pd.read_csv("attendance/attendance_" + date + ".csv")
-st.dataframe(df.style.highlight_max(axis=0))
-               
-            
+    st.warning("No attendance records found yet.")
