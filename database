@@ -1,0 +1,14 @@
+# importing required libraries
+import mysql.connector
+
+dataBase = mysql.connector.connect(
+  host ="10.88.79.131",
+  user ="pranayroyal",
+  passwd ="1611"
+)
+
+# preparing a cursor object
+cursorObject = dataBase.cursor()
+
+# creating database
+cursorObject.execute("CREATE DATABASE geeks4geeks")
