@@ -16,7 +16,10 @@ st.write("Today's Date:", today)
 
 attendance_folder = "attendance"
 
-files = os.listdir(attendance_folder)
+if os.path.exists(attendance_folder):
+    files = os.listdir(attendance_folder)
+else:
+    files = []
 
 csv_files = [file for file in files if file.endswith(".csv")]
 
