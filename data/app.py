@@ -10,8 +10,14 @@ import pandas as pd
 from datetime import datetime
 from sklearn.neighbors import KNeighborsClassifier
 
+from streamlit_webrtc import (
+    webrtc_streamer,
+    VideoTransformerBase,
+    RTCConfiguration
+)
 
-# ---------------- CONFIG ----------------
+
+# ---------------- PAGE SETTINGS ----------------
 
 st.set_page_config(
     page_title="Automatic Attendance System",
@@ -20,13 +26,16 @@ st.set_page_config(
 )
 
 
+# ---------------- VARIABLES ----------------
+
 THRESHOLD_TIME = 60
 
 marked_names = set()
 detection_times = {}
 
 
-# ---------------- LOAD MODEL ----------------
+# ---------------- LOAD FACE MODEL ----------------
+
 
 @st.cache_resource
 def load_model():
@@ -38,10 +47,10 @@ def load_model():
         FACES = pickle.load(f)
 
 
-    min_len = min(len(FACES), len(LABELS))
+    size = min(len(FACES), len(LABELS))
 
-    FACES = FACES[:min_len]
-    LABELS = LABELS[:min_len]
+    FACES = FACES[:size]
+    LABELS = LABELS[:size]
 
 
     knn = KNeighborsClassifier(
@@ -53,12 +62,16 @@ def load_model():
         LABELS
     )
 
+
     return knn
 
 
 
 knn = load_model()
 
+
+
+# ---------------- FACE DETECTOR ----------------
 
 
 facedetect = cv2.CascadeClassifier(
@@ -70,9 +83,12 @@ facedetect = cv2.CascadeClassifier(
 # ---------------- ATTENDANCE FILE ----------------
 
 
-def get_attendance_file():
+def attendance_file():
 
-    today = datetime.now().strftime("%d-%m-%Y")
+    today = datetime.now().strftime(
+        "%d-%m-%Y"
+    )
+
 
     folder = "attendance"
 
@@ -81,7 +97,10 @@ def get_attendance_file():
         os.makedirs(folder)
 
 
-    file = f"{folder}/Attendance_{today}.csv"
+
+    file = (
+        f"{folder}/Attendance_{today}.csv"
+    )
 
 
     if not os.path.exists(file):
@@ -107,12 +126,13 @@ def get_attendance_file():
 
 
 
-# ---------------- SAVE ATTENDANCE ----------------
+# ---------------- MARK ATTENDANCE ----------------
 
 
 def mark_attendance(name):
 
-    file = get_attendance_file()
+    file = attendance_file()
+
 
     timestamp = datetime.now().strftime(
         "%H:%M:%S"
@@ -125,6 +145,7 @@ def mark_attendance(name):
         newline=""
     ) as f:
 
+
         writer = csv.writer(f)
 
         writer.writerow(
@@ -135,75 +156,41 @@ def mark_attendance(name):
         )
 
 
-# ---------------- UI ----------------
+
+# ---------------- WEBRTC CAMERA ----------------
 
 
-st.title(
-    "🎓 Automatic Attendance System"
+RTC_CONFIGURATION = RTCConfiguration(
+    {
+        "iceServers":
+        [
+            {
+                "urls":
+                [
+                    "stun:stun.l.google.com:19302"
+                ]
+            }
+        ]
+    }
 )
 
 
-st.write(
-    "Face Recognition Based Attendance System"
-)
+
+class FaceRecognition(VideoTransformerBase):
 
 
-
-start = st.button(
-    "📷 Start Attendance"
-)
+    def transform(self, frame):
 
 
-
-FRAME_WINDOW = st.empty()
-
-
-
-# ---------------- CAMERA ----------------
-
-
-if start:
-
-
-    camera = cv2.VideoCapture(0)
-
-
-    if not camera.isOpened():
-
-        st.error(
-            "Camera not detected"
+        img = frame.to_ndarray(
+            format="bgr24"
         )
-
-        st.stop()
-
-
-
-    while True:
-
-
-        ret, frame = camera.read()
-
-
-        if not ret:
-            st.error(
-                "Cannot read camera"
-            )
-            break
-
-
-
-        frame = cv2.resize(
-            frame,
-            (640,480)
-        )
-
 
 
         gray = cv2.cvtColor(
-            frame,
+            img,
             cv2.COLOR_BGR2GRAY
         )
-
 
 
         faces = facedetect.detectMultiScale(
@@ -217,7 +204,7 @@ if start:
         for (x,y,w,h) in faces:
 
 
-            crop = frame[
+            crop = img[
                 y:y+h,
                 x:x+w
             ]
@@ -228,7 +215,14 @@ if start:
                 resized = cv2.resize(
                     crop,
                     (50,50)
-                ).flatten().reshape(1,-1)
+                )
+
+
+                resized = resized.flatten()
+
+                resized = resized.reshape(
+                    1,-1
+                )
 
 
                 name = str(
@@ -236,113 +230,143 @@ if start:
                 )
 
 
-            except:
 
-                continue
-
-
-
-            cv2.rectangle(
-                frame,
-                (x,y),
-                (x+w,y+h),
-                (0,255,0),
-                2
-            )
-
-
-            cv2.putText(
-                frame,
-                name,
-                (x,y-10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (255,255,255),
-                2
-            )
-
-
-
-            # -------- TIMER --------
-
-
-            current_time = time.time()
-
-
-
-            if name not in detection_times:
-
-                detection_times[name] = current_time
-
-
-
-            elapsed = (
-                current_time -
-                detection_times[name]
-            )
-
-
-
-            remaining = int(
-                THRESHOLD_TIME -
-                elapsed
-            )
-
-
-
-            if remaining > 0:
-
-
-                cv2.putText(
-                    frame,
-                    f"Stay {remaining}s",
-                    (x,y+h+40),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
+                cv2.rectangle(
+                    img,
+                    (x,y),
+                    (x+w,y+h),
                     (0,255,0),
                     2
                 )
 
 
 
-            # -------- MARK ATTENDANCE --------
-
-
-            if (
-                elapsed >= THRESHOLD_TIME
-                and name not in marked_names
-            ):
-
-
-                mark_attendance(
-                    name
-                )
-
-
-                marked_names.add(
-                    name
-                )
-
-
-                st.success(
-                    f"✅ Attendance marked for {name}"
+                cv2.putText(
+                    img,
+                    name,
+                    (x,y-10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (255,255,255),
+                    2
                 )
 
 
 
-        frame = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2RGB
-        )
-
-
-        FRAME_WINDOW.image(
-            frame
-        )
+                current_time = time.time()
 
 
 
-    camera.release()
+                if name not in detection_times:
+
+                    detection_times[name] = current_time
+
+
+
+                elapsed = (
+                    current_time -
+                    detection_times[name]
+                )
+
+
+
+                remaining = int(
+                    THRESHOLD_TIME -
+                    elapsed
+                )
+
+
+
+                if remaining > 0:
+
+
+                    cv2.putText(
+                        img,
+                        f"Stay {remaining}s",
+                        (x,y+h+40),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (0,255,0),
+                        2
+                    )
+
+
+
+                if (
+                    elapsed >= THRESHOLD_TIME
+                    and name not in marked_names
+                ):
+
+
+                    mark_attendance(
+                        name
+                    )
+
+
+                    marked_names.add(
+                        name
+                    )
+
+
+                    cv2.putText(
+                        img,
+                        "Attendance Marked",
+                        (20,40),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        (0,255,0),
+                        3
+                    )
+
+
+
+            except Exception as e:
+
+                print(e)
+
+
+
+        return img
+
+
+
+
+
+# ---------------- UI ----------------
+
+
+
+st.title(
+    "🎓 Automatic Attendance System"
+)
+
+
+st.write(
+    "Face Recognition Based Attendance System"
+)
+
+
+
+st.info(
+    "Allow camera permission and stay in front of camera for 60 seconds."
+)
+
+
+
+webrtc_streamer(
+
+    key="attendance",
+
+    video_transformer_factory=FaceRecognition,
+
+    rtc_configuration=RTC_CONFIGURATION,
+
+    media_stream_constraints={
+        "video": True,
+        "audio": False
+    }
+
+)
 
 
 
@@ -356,7 +380,14 @@ st.subheader(
 
 
 
-file = get_attendance_file()
+today = datetime.now().strftime(
+    "%d-%m-%Y"
+)
+
+
+file = (
+    f"attendance/Attendance_{today}.csv"
+)
 
 
 
@@ -364,6 +395,11 @@ if os.path.exists(file):
 
 
     df = pd.read_csv(file)
+
+
+    st.success(
+        "Attendance Loaded Successfully"
+    )
 
 
     st.dataframe(
@@ -378,9 +414,9 @@ if os.path.exists(file):
     )
 
 
-
 else:
 
-    st.info(
-        "No attendance today"
+
+    st.warning(
+        "No attendance recorded today"
     )
