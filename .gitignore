@@ -1,4 +1,4 @@
-*.pkl
-*.avi
-attendance/*.csv
+.venv/
 __pycache__/
+*.pyc
+.env
